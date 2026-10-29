@@ -186,4 +186,26 @@ app.log.removeHandler(h)
 
 sha = json.loads(app.handler(ev({"jsonrpc": "2.0", "id": 9, "method": "server/source_sha256"}), None)["body"])["result"]["sha256"]
 print("source sha256", sha)
+# --- /health: no auth, any method, warms the secret path -----------------
+_warm = []
+_real_get_secret = app._get_secret
+app._get_secret = lambda: _warm.append(1) or {"bearer_token": "tok123"}
+for _p, _m in (("/health", "GET"), ("/health/", "POST")):
+    _r = app.handler(ev(None, auth=None, method=_m, path=_p), None)
+    assert _r["statusCode"] == 200 and json.loads(_r["body"]) == {"ok": True}, _r
+assert len(_warm) == 2, _warm
+# the warm-up schedule's event: a direct invoke with no headers at all
+_r = app.handler({"rawPath": "/health", "requestContext": {"http": {"method": "GET"}}}, None)
+assert _r["statusCode"] == 200, _r
+
+
+def _boom():
+    raise RuntimeError("no secret")
+
+
+app._get_secret = _boom
+_r = app.handler(ev(None, auth=None, method="GET", path="/health"), None)
+assert _r["statusCode"] == 503 and json.loads(_r["body"]) == {"ok": False}, _r
+app._get_secret = _real_get_secret
+assert app.handler(ev(None, auth=None, method="GET", path="/healthz"), None)["statusCode"] == 401
 print("ALL OK")
