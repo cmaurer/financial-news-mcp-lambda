@@ -67,9 +67,10 @@ template = {
             "Properties": {"FunctionName": {"Ref": f"{P}Function"}, "Action": "lambda:InvokeFunction",
                            "Principal": "*", "InvokedViaFunctionUrl": True},
         },
-        # Weekday warm-up: invokes the function with a /health event at 6:30 America/Chicago
-        # (11:30 UTC in daylight time, 12:30 UTC in standard time), five minutes before the
-        # 6:35 CT scheduled task, so the task's first MCP call lands on a warm environment.
+        # Weekday warm-up: invokes the function with a /health event every 3 minutes from 6:30 to
+        # 6:45 America/Chicago (11:30-11:45 UTC in daylight time, 12:30-12:45 UTC in standard time),
+        # bracketing the 6:35 CT scheduled task, which can start a few minutes late. An idle
+        # environment can be reclaimed within minutes, so one 6:30 ping was not a safe margin.
         # EventBridge Scheduler (not an EventBridge rule) because rules only take UTC cron and
         # would drift an hour off the task at each DST change.
         f"{P}WarmupRole": {
@@ -88,8 +89,8 @@ template = {
             "Type": "AWS::Scheduler::Schedule",
             "Properties": {
                 "Name": "financial-news-mcp-warmup",
-                "Description": "Weekday /health invoke before the 6:35 CT morning brief so the function is warm",
-                "ScheduleExpression": "cron(30 6 ? * MON-FRI *)",
+                "Description": "Weekday /health invokes every 3 min, 6:30-6:45 CT, around the 6:35 morning brief",
+                "ScheduleExpression": "cron(30,33,36,39,42,45 6 ? * MON-FRI *)",
                 "ScheduleExpressionTimezone": "America/Chicago",
                 "FlexibleTimeWindow": {"Mode": "OFF"},
                 "State": "ENABLED",

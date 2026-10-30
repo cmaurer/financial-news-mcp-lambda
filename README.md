@@ -32,7 +32,7 @@ For the three Google News-backed sources, the " - Reuters" / " - Yahoo Finance" 
 | Endpoint | `https://ppl6oixxhm3pzruet2wvqtxosq0zmvil.lambda-url.us-east-1.on.aws/` (stack output `FunctionUrl`) |
 | Secret | `financial-news-mcp/config` — `bearer_token` only |
 | Logs | `/aws/lambda/financial-news-mcp` (30-day retention) |
-| Warm-up | EventBridge Scheduler `financial-news-mcp-warmup`: `/health` invoke at 6:30 America/Chicago, Mon–Fri |
+| Warm-up | EventBridge Scheduler `financial-news-mcp-warmup`: `/health` invoke every 3 min, 6:30–6:45 America/Chicago, Mon–Fri |
 | claude.ai connector | custom connector, "No sign in", `Authorization: Bearer <token>` header |
 
 ## How it works
@@ -41,7 +41,7 @@ For the three Google News-backed sources, the " - Reuters" / " - Yahoo Finance" 
 - **Auth:** `Authorization: Bearer <token>` on every request (401 otherwise); `Bearer<token>` without the space is also accepted.
 - **Access log:** one JSON line per request — method, path, status, MCP method/tool, response size, duration, user agent, and the Authorization header's *shape* only (`missing`, `bearer-with-space`, `bearer-no-space`, `other-scheme`). No part of the token is ever logged; the tests assert this.
 - **`/health`:** unauthenticated (any method) and returns `{"ok": true}` — or 503 `{"ok": false}` if the secret can't be loaded. It does the same cold-start work as a real request (imports, boto3, Secrets Manager client, secret fetch) and returns nothing else.
-- **Warm-up:** an EventBridge Scheduler schedule (`financial-news-mcp-warmup`) invokes the function with a `/health` event at 6:30 America/Chicago on weekdays — five minutes before the 6:35 CT morning-brief scheduled task — so the task's connector doesn't hit a cold start and report the server unavailable. The schedule uses the Chicago timezone so it follows DST along with the task (11:30 UTC in summer, 12:30 UTC in winter). If the task's time changes, change `ScheduleExpression` in `build_template.py` to match.
+- **Warm-up:** an EventBridge Scheduler schedule (`financial-news-mcp-warmup`) invokes the function with a `/health` event every 3 minutes from 6:30 to 6:45 America/Chicago on weekdays, bracketing the 6:35 CT morning-brief scheduled task (which can start a few minutes late), so the task's connector doesn't hit a cold start and report the server unavailable. One 6:30 ping wasn't enough margin: an idle environment can be reclaimed within minutes. The schedule uses the Chicago timezone so it follows DST along with the task (11:30–11:45 UTC in summer, 12:30–12:45 UTC in winter). If the task's time changes, change `ScheduleExpression` in `build_template.py` to match.
 - **IAM:** the function role can write its own log group and read its one secret.
 
 ## Files
